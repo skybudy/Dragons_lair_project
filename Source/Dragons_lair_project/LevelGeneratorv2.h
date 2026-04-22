@@ -22,12 +22,11 @@ protected:
 
     /** * Block Blueprints:
      * Index 0: STARTER BLOCK (Spawns only once at the start)
-     * Index 1 to N: VARIATION BLOCKS (Spawned randomly in a shuffled sequence)
-     */
+     * Index 1 to N: VARIATION BLOCKS (Spawned randomly in a shuffled sequence)*/
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Runner | Setup")
     TArray<TSubclassOf<AActor>> BlockTemplates;
 
-    /** Fixed length of a single block in Unreal Units (e.g., 1500 for 15 meters) */
+    /** Fixed length of a single block in Unreal Units (1500 +-= 15 meters) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Runner | Settings")
     float BlockLength = 1500.0f;
 

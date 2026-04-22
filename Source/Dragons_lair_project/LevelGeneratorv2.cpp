@@ -62,7 +62,7 @@ int32 ALevelGeneratorv2::GetNextBlockIndex()
             }
         }
 
-        // Standard Fisher-Yates shuffle
+        // shuffle
         for (int32 i = ShuffleBag.Num() - 1; i > 0; i--)
         {
             int32 RandomIdx = FMath::RandRange(0, i);
@@ -81,7 +81,7 @@ int32 ALevelGeneratorv2::GetNextBlockIndex()
 
 void ALevelGeneratorv2::SpawnBlock(TSubclassOf<AActor> BlockClass, FVector Location)
 {
-    // 1. Fundamental null check
+    // 1. null check
     if (!BlockClass || !GetWorld()) return;
 
     FActorSpawnParameters Params;
@@ -89,7 +89,7 @@ void ALevelGeneratorv2::SpawnBlock(TSubclassOf<AActor> BlockClass, FVector Locat
 
     AActor* NewBlock = GetWorld()->SpawnActor<AActor>(BlockClass, Location, FRotator::ZeroRotator, Params);
 
-    if (IsValid(NewBlock)) // 2. Use IsValid() instead of just if(NewBlock)
+	if (IsValid(NewBlock)) // 2. Use IsValid() instead of just if(NewBlock) for safety
     {
         if (IsValid(MovementParent))
         {
@@ -107,7 +107,7 @@ void ALevelGeneratorv2::CleanupBlocks()
     {
         AActor* Block = ActiveBlocks[i];
 
-        // 3. Ensure we are not trying to access or destroy something already gone
+        // 3. Ensure we are not trying to access or destroy something already gones
         if (IsValid(Block))
         {
             if (Block->GetActorLocation().X < DeletionXThreshold)

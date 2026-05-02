@@ -1,125 +1,133 @@
 #include "LevelGeneratorv2.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/World.h"
 
 ALevelGeneratorv2::ALevelGeneratorv2()
 {
     PrimaryActorTick.bCanEverTick = true;
+    CurrentBiome = EBiomeType::Biome1;
+    InternalProgress = 0.0f;
+    FloorsInCurrentChunk = 0;
+    MaxFloorsInChunk = 8;
 }
 
 void ALevelGeneratorv2::BeginPlay()
 {
     Super::BeginPlay();
+    if (BlockTemplates.Num() < 2) return;
 
-    if (BlockTemplates.Num() < 2)
-    {
-        UE_LOG(LogTemp, Error, TEXT("LevelGeneratorv2: Need at least 2 templates (1 Starter, 1 Variation)!"));
-        return;
-    }
-
-    // 1. Spawn the unique Starter Block (Index 0)
     SpawnBlock(BlockTemplates[0], FVector::ZeroVector);
-
-    // 2. Fill the rest of the initial track with variation blocks
     for (int32 i = 1; i < MaxBlocksAhead; i++)
     {
-        FVector NextLocation = FVector(i * BlockLength, 0.0f, 0.0f);
-        SpawnBlock(BlockTemplates[GetNextBlockIndex()], NextLocation);
+        SpawnBlock(BlockTemplates[GetNextBlockIndex()], FVector(i * LevelBlockLength, 0.0f, 0.0f));
     }
 }
 
 void ALevelGeneratorv2::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
+    InternalProgress = FMath::Clamp(InternalProgress + ProgressIncrement, 0.0f, 1.0f);
 
     if (!LastSpawnedBlock || !MovementParent) return;
 
-    // Check if world movement has moved the last block enough to spawn a new one
     float LastBlockX = LastSpawnedBlock->GetActorLocation().X;
-    float SpawnThreshold = (MaxBlocksAhead - 1) * BlockLength;
+    float SpawnThreshold = (MaxBlocksAhead - 1) * LevelBlockLength;
 
     if (LastBlockX < SpawnThreshold)
     {
-        FVector NewSpawnPos = LastSpawnedBlock->GetActorLocation() + FVector(BlockLength, 0.0f, 0.0f);
-        SpawnBlock(BlockTemplates[GetNextBlockIndex()], NewSpawnPos);
+        FVector NewPos = LastSpawnedBlock->GetActorLocation() + FVector(LevelBlockLength, 0.0f, 0.0f);
+        SpawnBlock(BlockTemplates[GetNextBlockIndex()], NewPos);
     }
-
     CleanupBlocks();
-}
-
-int32 ALevelGeneratorv2::GetNextBlockIndex()
-{
-    // Safety check: ensure we have variation blocks (index 1 and above)
-    if (BlockTemplates.Num() < 2) return 0;
-
-    if (ShuffleBag.Num() == 0)
-    {
-        // Refill the bag with indices starting from 1
-        for (int32 i = 1; i < BlockTemplates.Num(); i++)
-        {
-            // Only add if the class actually exists in the array slot
-            if (BlockTemplates[i])
-            {
-                ShuffleBag.Add(i);
-            }
-        }
-
-        // Standard Fisher-Yates shuffle
-        for (int32 i = ShuffleBag.Num() - 1; i > 0; i--)
-        {
-            int32 RandomIdx = FMath::RandRange(0, i);
-            ShuffleBag.Swap(i, RandomIdx);
-        }
-    }
-
-    // Double check if we actually have anything in the bag now
-    if (ShuffleBag.Num() > 0)
-    {
-        return ShuffleBag.Pop();
-    }
-
-    return 1; // Fallback to first variation
 }
 
 void ALevelGeneratorv2::SpawnBlock(TSubclassOf<AActor> BlockClass, FVector Location)
 {
-    // 1. Fundamental null check
-    if (!BlockClass || !GetWorld()) return;
-
+    if (!BlockClass) return;
     FActorSpawnParameters Params;
     Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
     AActor* NewBlock = GetWorld()->SpawnActor<AActor>(BlockClass, Location, FRotator::ZeroRotator, Params);
 
-    if (IsValid(NewBlock)) // 2. Use IsValid() instead of just if(NewBlock)
+    if (IsValid(NewBlock))
     {
-        if (IsValid(MovementParent))
-        {
-            NewBlock->AttachToActor(MovementParent, FAttachmentTransformRules::KeepWorldTransform);
-        }
-
+        if (MovementParent) NewBlock->AttachToActor(MovementParent, FAttachmentTransformRules::KeepWorldTransform);
+        ReplaceFloorsWithBiomes(NewBlock);
         ActiveBlocks.Add(NewBlock);
         LastSpawnedBlock = NewBlock;
     }
+}
+
+void ALevelGeneratorv2::ReplaceFloorsWithBiomes(AActor* ParentBlock)
+{
+    TArray<UStaticMeshComponent*> MeshComps;
+    ParentBlock->GetComponents<UStaticMeshComponent>(MeshComps);
+    MeshComps.Sort([](const UStaticMeshComponent& A, const UStaticMeshComponent& B) {
+        return A.GetRelativeLocation().X < B.GetRelativeLocation().X;
+        });
+
+    for (UStaticMeshComponent* Mesh : MeshComps)
+    {
+        if (Mesh->GetName().Contains(TEXT("floor")))
+        {
+            FVector FinalWorldLoc = ParentBlock->GetActorLocation() + FVector(Mesh->GetRelativeLocation().X, 0.0f, 0.0f);
+            TSubclassOf<AActor> BiomeClass = GetNextBiomeClass();
+            if (BiomeClass)
+            {
+                FActorSpawnParameters BParams;
+                BParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+                AActor* BiomeActor = GetWorld()->SpawnActor<AActor>(BiomeClass, FinalWorldLoc, FRotator::ZeroRotator, BParams);
+                if (BiomeActor)
+                {
+                    BiomeActor->AttachToActor(ParentBlock, FAttachmentTransformRules::KeepWorldTransform);
+                    Mesh->SetVisibility(false);
+                    Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+                }
+            }
+        }
+    }
+}
+
+TSubclassOf<AActor> ALevelGeneratorv2::GetNextBiomeClass()
+{
+    if (InternalProgress >= Biome3Threshold) CurrentBiome = EBiomeType::Biome3;
+    else
+    {
+        if (FloorsInCurrentChunk >= MaxFloorsInChunk)
+        {
+            CurrentBiome = (CurrentBiome == EBiomeType::Biome1) ? EBiomeType::Biome2 : EBiomeType::Biome1;
+            FloorsInCurrentChunk = 0;
+            MaxFloorsInChunk = FMath::RandRange(6, 10);
+        }
+        FloorsInCurrentChunk++;
+    }
+
+    TArray<TSubclassOf<AActor>>* Pool = &Biome1Pool;
+    if (CurrentBiome == EBiomeType::Biome2) Pool = &Biome2Pool;
+    else if (CurrentBiome == EBiomeType::Biome3) Pool = &Biome3Pool;
+
+    return (Pool && Pool->Num() > 0) ? (*Pool)[FMath::RandRange(0, Pool->Num() - 1)] : nullptr;
+}
+
+int32 ALevelGeneratorv2::GetNextBlockIndex()
+{
+    if (BlockTemplates.Num() < 2) return 0;
+    if (ShuffleBag.Num() == 0)
+    {
+        for (int32 i = 1; i < BlockTemplates.Num(); i++) ShuffleBag.Add(i);
+        for (int32 i = ShuffleBag.Num() - 1; i > 0; i--) ShuffleBag.Swap(i, FMath::RandRange(0, i));
+    }
+    return ShuffleBag.Pop();
 }
 
 void ALevelGeneratorv2::CleanupBlocks()
 {
     for (int32 i = ActiveBlocks.Num() - 1; i >= 0; i--)
     {
-        AActor* Block = ActiveBlocks[i];
-
-        // 3. Ensure we are not trying to access or destroy something already gone
-        if (IsValid(Block))
+        if (IsValid(ActiveBlocks[i]) && ActiveBlocks[i]->GetActorLocation().X < DeletionXThreshold)
         {
-            if (Block->GetActorLocation().X < DeletionXThreshold)
-            {
-                ActiveBlocks.RemoveAt(i);
-                Block->Destroy();
-            }
-        }
-        else
-        {
-            // Remove null entries if any
+            AActor* ToDestroy = ActiveBlocks[i];
             ActiveBlocks.RemoveAt(i);
+            ToDestroy->Destroy();
         }
     }
 }

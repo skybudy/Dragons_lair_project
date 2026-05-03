@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+// #include "PlayerCharacter.h"
 #include "Enemy.generated.h"
 
 UCLASS()
@@ -15,6 +16,7 @@ public:
 	// Sets default values for this character's properties
 	AEnemy();
 	//TO DO, add Reference to WBP QTE, BP Patrol and PlayerCharacter
+	//UPROPERTY(VisibleAnywhere, Blueprintable = "Variable")
 	float FGameTime;
 	float FPatrolSpeed;
 	bool bSuccess;
@@ -30,9 +32,6 @@ public:
 	
 	UPROPERTY(VisibleAnywhere, Category = "Collision Sphere")
 	class USphereComponent* EnemyVisionRange;
-	
-	// UPROPERTY(VisibleAnywhere, Category = "State Tree")
-	// class UStateTreeComponent* StateTreeComponent;
 	
 	UFUNCTION()
 	void OnVisionSphereBeginOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, 

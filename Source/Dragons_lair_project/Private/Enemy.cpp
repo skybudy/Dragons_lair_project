@@ -13,14 +13,17 @@ AEnemy::AEnemy()
 	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = false;
 	SkeletalMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("SkeletalMesh"));
-	EnemyAttackRange = CreateDefaultSubobject<UCapsuleComponent>(TEXT("EnemyAttackRange"));
 	EnemyVisionRange = CreateDefaultSubobject<USphereComponent>(TEXT("EnemyVisionRange"));
-	// StateTreeComponent = CreateDefaultSubobject<UStateTreeComponent>(TEXT("StatTree"));
+	EnemyAttackRange = CreateDefaultSubobject<UCapsuleComponent>(TEXT("EnemyAttackRange"));
 	
+	//Create root component and attach collisions
 	RootComponent = SkeletalMesh;
-	EnemyAttackRange ->SetupAttachment(SkeletalMesh);
 	EnemyVisionRange ->SetupAttachment(SkeletalMesh);
-
+	EnemyAttackRange ->SetupAttachment(SkeletalMesh);
+	
+	//Binds to overlap function
+	EnemyVisionRange ->OnComponentBeginOverlap.AddDynamic(this, &AEnemy::OnVisionSphereBeginOverlap);
+	EnemyAttackRange ->OnComponentBeginOverlap.AddDynamic(this, &AEnemy::OnAttackRangeBeginOverlap);
 }
 
 // Called when the game starts or when spawned
@@ -35,7 +38,7 @@ void AEnemy::BeginPlay()
 }
 
 void AEnemy::OnVisionSphereBeginOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
-	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+	UPrimitiveComponent* OtherComp, int OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
 	//This is the cast function
 	ACharacter* OverlappingCharacter = Cast<ACharacter>(OtherActor);
@@ -46,8 +49,8 @@ void AEnemy::OnVisionSphereBeginOverlap(UPrimitiveComponent* OverlappedComp, AAc
 }
 
 void AEnemy::OnAttackRangeBeginOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
-	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
-{
+	UPrimitiveComponent* OtherComp, int OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+{	
 	//This is the cast function
 	ACharacter* OverlappingCharacter = Cast<ACharacter>(OtherActor);
 	if (OverlappingCharacter)

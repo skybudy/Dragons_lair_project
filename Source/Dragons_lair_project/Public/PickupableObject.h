@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Components/SphereComponent.h"
 #include "GameFramework/Actor.h"
+// #include "PlayerCharacter.h"
 #include "PickupableObject.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPickedUp);
